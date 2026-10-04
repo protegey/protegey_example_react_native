@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Button, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Button, PermissionsAndroid, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Protegey, ProtegeyKycProvider, useProtegeyKyc } from '@protegey/react-native-sdk';
 
@@ -109,6 +109,19 @@ function Home() {
   }
 
   async function startKyc() {
+    // Ask up front, before the webview ever loads — relying only on the webview's own
+    // permission-request bridge to the OS is less predictable across Android OEMs/versions than
+    // just getting the OS permission granted first and letting the webview inherit it. iOS has no
+    // equivalent upfront API here — WKWebView triggers the system prompt itself on first use,
+    // backed by NSCameraUsageDescription in Info.plist.
+    if (Platform.OS === 'android') {
+      const granted = await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.CAMERA);
+      if (granted !== PermissionsAndroid.RESULTS.GRANTED) {
+        append('Camera permission denied — identity verification needs camera access to scan your document and face.');
+        return;
+      }
+    }
+
     try {
       // One call: starts the session AND shows it in a draggable sheet — the user never leaves
       // this app, and there's no UI code to write for that on our end.
