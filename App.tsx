@@ -26,7 +26,6 @@ function Home() {
   const [baseUrl, setBaseUrl] = useState(DEFAULT_BASE_URL);
   const [apiKeyInput, setApiKeyInput] = useState(DEFAULT_API_KEY);
   const [baseUrlInput, setBaseUrlInput] = useState(DEFAULT_BASE_URL);
-  const [visitorId, setVisitorId] = useState<string | null>(null);
   const [log, setLog] = useState<string[]>(['Waiting for device.identify()…']);
   const { present } = useProtegeyKyc();
 
@@ -61,36 +60,23 @@ function Home() {
   async function identifyDevice() {
     try {
       const result = await protegey.device.identify({ externalCustomerId: CUSTOMER_ID });
-      setVisitorId(result.visitorId);
       append(`device.identify() -> visitorId=${result.visitorId}, action=${result.action}`);
     } catch (err) {
       append(`device.identify() failed: ${(err as Error).message}`);
     }
   }
 
-  // Typically called once on login/session start — done automatically here so the rest of the
-  // demo already has a visitorId to fold in; the button below lets you trigger it again on demand.
+  // Typically called once on login/session start — done automatically here so a transaction
+  // reported moments later for this same CUSTOMER_ID picks it up on its own (see the SDK docs'
+  // Transactions section); the button below lets you trigger it again on demand.
   useEffect(() => {
     identifyDevice();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [protegey]);
 
-  async function reportTransaction() {
-    try {
-      const result = await protegey.transactions.report({
-        externalTransactionId: `rn-example-${Date.now()}`,
-        externalCustomerId: CUSTOMER_ID,
-        direction: 'DEBIT',
-        amount: 5000,
-        currency: 'XAF',
-        transactionType: 'test',
-        visitorId: visitorId ?? undefined,
-      });
-      append(`transactions.report() -> decision=${result.decision}, riskScore=${result.riskScore}`);
-    } catch (err) {
-      append(`transactions.report() failed: ${(err as Error).message}`);
-    }
-  }
+  // No "report a transaction" call here on purpose: that call belongs server-to-server, from
+  // your own backend (POST /partner-api/transactions), not from this app. device.identify()
+  // above is this app's whole job — Protegey links the two automatically by CUSTOMER_ID.
 
   async function reportBehavioral() {
     try {
@@ -137,9 +123,10 @@ function Home() {
       <ScrollView contentContainerStyle={styles.container}>
         <Text style={styles.title}>Protegey — React Native example</Text>
         <Text>
-          Demonstrates every @protegey/react-native-sdk module: device intelligence, transaction
-          reporting, behavioral biometrics, and identity verification shown in an in-app sheet —
-          the user never leaves this app.
+          Demonstrates this app's actual job: device intelligence, behavioral biometrics, and
+          identity verification shown in an in-app sheet — the user never leaves this app.
+          Transaction reporting isn't shown here: it belongs server-to-server, from your own
+          backend.
         </Text>
 
         <View style={styles.settings}>
@@ -152,7 +139,6 @@ function Home() {
 
         <View style={styles.buttons}>
           <Button title="Identify device again" onPress={identifyDevice} />
-          <Button title="Report a test transaction" onPress={reportTransaction} />
           <Button title="Report a behavioral event" onPress={reportBehavioral} />
           <Button title="Verify my identity" onPress={startKyc} />
         </View>
