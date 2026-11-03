@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Button, PermissionsAndroid, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, Button, PermissionsAndroid, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Protegey, ProtegeyKycProvider, useProtegeyKyc } from '@protegey/react-native-sdk';
+import type { KycSessionStatus } from '@protegey/react-native-sdk';
 
 const DEFAULT_API_KEY = process.env.EXPO_PUBLIC_PROTEGEY_API_KEY as string;
 const DEFAULT_BASE_URL = process.env.EXPO_PUBLIC_PROTEGEY_BASE_URL as string;
@@ -112,9 +113,41 @@ function Home() {
       // One call: starts the session AND shows it in a draggable sheet — the user never leaves
       // this app, and there's no UI code to write for that on our end.
       const status = await present(protegey.kyc, { externalUserId: CUSTOMER_ID });
-      append(`KYC status -> ${status?.status ?? '(closed before a status arrived)'}`);
+      if (!status) {
+        append('KYC sheet closed before a status arrived.');
+        return;
+      }
+      append(`KYC status -> ${status.status} (outcome: ${status.outcome ?? 'null'})`);
+      showKycResultScreen(status);
     } catch (err) {
       append(`kyc.startSession() failed: ${(err as Error).message}`);
+    }
+  }
+
+  /**
+   * The pattern a real app follows after present() resolves: switch on the typed `outcome` field
+   * — not the raw backend status string — to decide what the user sees next. 'SUCCESS' means
+   * biometric's match confidence was >= your account's auto-approve threshold (80% by default);
+   * 'MANUAL' means it passed biometric's hard checks (liveness, clean document scan) but fell below
+   * that threshold, so a human on your compliance team needs to review it — your own dashboard
+   * shows it under "In Review"; 'FAILED' means a hard check itself failed.
+   */
+  function showKycResultScreen(status: KycSessionStatus) {
+    switch (status.outcome) {
+      case 'SUCCESS':
+        Alert.alert('✅ Identity verified', 'Your identity has been confirmed automatically. You can continue.');
+        break;
+      case 'MANUAL':
+        Alert.alert(
+          '⏳ Pending review',
+          "We received your documents. A reviewer will confirm your identity shortly — we'll let you know once it's done.",
+        );
+        break;
+      case 'FAILED':
+        Alert.alert('❌ Verification failed', "We couldn't verify your identity. Please try again with better lighting and a valid, undamaged document.");
+        break;
+      default:
+        Alert.alert('Result not available yet', "We couldn't determine the result yet. This can happen if the session is still being processed.");
     }
   }
 
