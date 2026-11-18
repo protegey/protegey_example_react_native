@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Alert, Button, PermissionsAndroid, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Protegey, ProtegeyKycProvider, useProtegeyKyc } from '@protegey/react-native-sdk';
+import { Protegey, ProtegeyApiError, ProtegeyKycProvider, useProtegeyKyc } from '@protegey/react-native-sdk';
 import type { KycSessionStatus } from '@protegey/react-native-sdk';
 
 const DEFAULT_API_KEY = process.env.EXPO_PUBLIC_PROTEGEY_API_KEY as string;
@@ -11,6 +11,12 @@ const STORAGE_KEY = 'protegey-example-credentials';
 // A fresh id per demo run — real integrations pass the end user's own stable id instead.
 const CUSTOMER_ID = `customer-${Math.random().toString(36).slice(2, 8)}`;
 const SESSION_ID = `rn-example-session-${Date.now()}`;
+
+// partner-api errors carry the HTTP status — e.g. 401 "Invalid API key", or 403 when the partner
+// account is suspended / has no billing contract yet (those block every POST).
+function describeError(err: unknown): string {
+  return err instanceof ProtegeyApiError ? `HTTP ${err.status}: ${err.message}` : (err as Error).message;
+}
 
 // <ProtegeyKycProvider> wraps the app once, near the root — it renders the KYC sheet (hidden
 // until present() is called) as a sibling of the real app content.
@@ -61,9 +67,9 @@ function Home() {
   async function identifyDevice() {
     try {
       const result = await protegey.device.identify({ externalCustomerId: CUSTOMER_ID });
-      append(`device.identify() -> visitorId=${result.visitorId}, action=${result.action}`);
+      append(`device.identify() -> visitorId=${result.visitorId}, action=${result.action}, riskScore=${result.riskScore}`);
     } catch (err) {
-      append(`device.identify() failed: ${(err as Error).message}`);
+      append(`device.identify() failed: ${describeError(err)}`);
     }
   }
 
@@ -88,10 +94,12 @@ function Home() {
         touch: { avgSwipeVelocity: 22, scrollBehaviorScore: 0.8 },
         navigation: { screenSequence: ['login', 'dashboard', 'transfer', 'confirm'] },
       });
-      // "LEARNING" for the first 5 sessions of any given customer — expected, not an error.
-      append(`behavioral.report() -> status=${result.status}, stepUpRecommended=${result.stepUpRecommended}`);
+      // "LEARNING" (no score yet) for the first 5 sessions of any given customer — expected, not an error.
+      append(
+        `behavioral.report() -> status=${result.status}, deviationScore=${result.deviationScore}, confidenceTier=${result.confidenceTier}, stepUpRecommended=${result.stepUpRecommended}`,
+      );
     } catch (err) {
-      append(`behavioral.report() failed: ${(err as Error).message}`);
+      append(`behavioral.report() failed: ${describeError(err)}`);
     }
   }
 
@@ -120,7 +128,7 @@ function Home() {
       append(`KYC status -> ${status.status} (outcome: ${status.outcome ?? 'null'})`);
       showKycResultScreen(status);
     } catch (err) {
-      append(`kyc.startSession() failed: ${(err as Error).message}`);
+      append(`kyc.startSession() failed: ${describeError(err)}`);
     }
   }
 
