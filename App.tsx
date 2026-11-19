@@ -143,8 +143,8 @@ function Home() {
   /**
    * The pattern a real app follows after present() resolves: switch on the typed `outcome` field
    * — not the raw backend status string — to decide what the user sees next. 'SUCCESS' means
-   * biometric's match confidence was >= your account's auto-approve threshold (80% by default);
-   * 'MANUAL' means it passed biometric's hard checks (liveness, clean document scan) but fell below
+   * the Protegey face match confidence was >= your account's auto-approve threshold (80% by default);
+   * 'MANUAL' means it passed the hard checks (liveness, clean document scan) but fell below
    * that threshold, so a human on your compliance team needs to review it — your own dashboard
    * shows it under "In Review"; 'FAILED' means a hard check itself failed.
    */
