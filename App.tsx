@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Alert, Button, PermissionsAndroid, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, Button, Image, PermissionsAndroid, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Protegey, ProtegeyApiError, ProtegeyKycProvider, useProtegeyKyc } from '@protegey/react-native-sdk';
-import type { KycSessionStatus } from '@protegey/react-native-sdk';
+import type { KycSessionImages, KycSessionStatus } from '@protegey/react-native-sdk';
 
 const DEFAULT_API_KEY = process.env.EXPO_PUBLIC_PROTEGEY_API_KEY as string;
 const DEFAULT_BASE_URL = process.env.EXPO_PUBLIC_PROTEGEY_BASE_URL as string;
@@ -34,6 +34,9 @@ function Home() {
   const [apiKeyInput, setApiKeyInput] = useState(DEFAULT_API_KEY);
   const [baseUrlInput, setBaseUrlInput] = useState(DEFAULT_BASE_URL);
   const [log, setLog] = useState<string[]>(['Waiting for device.identify()…']);
+  // The session's photos as pre-signed links — valid 1 hour, re-issued on every getSession().
+  // Display them right away; never persist the URLs.
+  const [kycImages, setKycImages] = useState<KycSessionImages | null>(null);
   const { present } = useProtegeyKyc();
 
   // Lets you point this app at any partner's key/environment at runtime, without rebuilding —
@@ -84,6 +87,8 @@ function Home() {
   // No "report a transaction" call here on purpose: that call belongs server-to-server, from
   // your own backend (POST /partner-api/transactions), not from this app. device.identify()
   // above is this app's whole job — Protegey links the two automatically by CUSTOMER_ID.
+  // Same for cash deposits (POST /partner-api/cash-deposits) and KYC lookups by externalUserId
+  // (kyc.listSessions): use @protegey/sdk's cashDeposits / kyc.listSessions from your backend.
 
   async function reportBehavioral() {
     try {
@@ -125,7 +130,10 @@ function Home() {
         append('KYC sheet closed before a status arrived.');
         return;
       }
-      append(`KYC status -> ${status.status} (outcome: ${status.outcome ?? 'null'})`);
+      // status = the final decision; recommendation = Protegey's own verdict (APPROVE / REVIEW /
+      // REJECT), which a manual override on your side never changes.
+      append(`KYC status -> ${status.status} (outcome: ${status.outcome ?? 'null'}, recommendation: ${status.recommendation ?? 'null'})`);
+      setKycImages(status.images ?? null);
       showKycResultScreen(status);
     } catch (err) {
       append(`kyc.startSession() failed: ${describeError(err)}`);
@@ -183,6 +191,20 @@ function Home() {
           <Button title="Report a behavioral event" onPress={reportBehavioral} />
           <Button title="Verify my identity" onPress={startKyc} />
         </View>
+        {kycImages && (
+          <View style={styles.images}>
+            {(['documentFront', 'documentBack', 'selfie', 'documentFaceCrop'] as const).map((key) => {
+              const image = kycImages[key];
+              if (!image) return null;
+              return (
+                <View key={key}>
+                  <Image source={{ uri: image.url }} style={styles.image} resizeMode="cover" />
+                  <Text style={styles.caption}>{key}</Text>
+                </View>
+              );
+            })}
+          </View>
+        )}
         <Text style={styles.log}>{log.join('\n')}</Text>
       </ScrollView>
     </SafeAreaView>
@@ -197,5 +219,8 @@ const styles = StyleSheet.create({
   settingsLabel: { fontSize: 12, fontWeight: '600', color: '#444' },
   input: { borderWidth: 1, borderColor: '#ccc', borderRadius: 4, padding: 8, backgroundColor: '#fff' },
   buttons: { gap: 8 },
+  images: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  image: { width: 96, height: 96, borderRadius: 4, backgroundColor: '#ddd' },
+  caption: { fontSize: 10, color: '#444' },
   log: { fontFamily: 'monospace', backgroundColor: '#f4f4f4', padding: 12, borderRadius: 4 },
 });
