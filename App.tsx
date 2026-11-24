@@ -251,7 +251,7 @@ function Home() {
           <Button title="Report a behavioral event" onPress={reportBehavioral} />
           <Button title="Verify my identity" onPress={startKyc} />
           <Button title="3D liveness check" onPress={() => startLiveness('LIVENESS')} />
-          <Button title="Re-verify me (3D:3D vs my KYC)" onPress={() => startLiveness('REVERIFICATION')} />
+          <Button title="Re-verify me (face match vs my KYC)" onPress={() => startLiveness('REVERIFICATION')} />
         </View>
         {kycImages && (
           <View style={styles.images}>
